@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { analyzeFoodImage } from "@/lib/gemini";
+import { resolveMealsDir } from "@/lib/paths";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const MAX_BYTES = 8 * 1024 * 1024;
-const PUBLIC_MEALS_DIR = path.join(process.cwd(), "public", "meals");
 
 const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -68,11 +68,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result, { status: 422 });
   }
 
-  await mkdir(PUBLIC_MEALS_DIR, { recursive: true });
+  const mealsDir = resolveMealsDir();
+  await mkdir(mealsDir, { recursive: true });
   const ext = safeExt(mimeType);
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const filepath = path.join(PUBLIC_MEALS_DIR, filename);
+  const filepath = path.join(mealsDir, filename);
   await writeFile(filepath, buf);
+  // Always serve via the same URL pattern. A Next.js rewrite + the
+  // /api/meals/[filename] handler take care of streaming from disk,
+  // regardless of whether MEALS_DIR points inside or outside /public.
   const imageUrl = `/meals/${filename}`;
 
   return NextResponse.json({ ...result, imageUrl }, { status: 200 });

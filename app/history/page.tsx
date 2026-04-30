@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import {
   isFirebaseConfigured,
   getAllMeals,
@@ -108,14 +110,21 @@ export default function HistoryPage() {
               {isOpen && (
                 <ul className="border-t border-line divide-y divide-line">
                   {d.meals.map((m) => (
-                    <li
-                      key={m.id}
-                      className="p-3 flex items-center justify-between text-sm"
-                    >
-                      <span className="truncate flex-1 mr-2">{m.name}</span>
-                      <span className="tabular-nums font-semibold">
-                        {m.calories} kcal
-                      </span>
+                    <li key={m.id}>
+                      <Link
+                        href={`/meal/${m.id}`}
+                        className="p-3 flex items-center gap-2 text-sm hover:bg-bg active:scale-[0.997] transition cursor-pointer"
+                      >
+                        <span className="truncate flex-1">{m.name}</span>
+                        <span className="tabular-nums font-semibold shrink-0">
+                          {m.calories} kcal
+                        </span>
+                        <ChevronRight
+                          size={14}
+                          className="text-ink-soft shrink-0"
+                          aria-hidden
+                        />
+                      </Link>
                     </li>
                   ))}
                 </ul>

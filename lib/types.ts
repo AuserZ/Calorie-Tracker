@@ -26,6 +26,8 @@ export type Meal = {
   confidence: Confidence;
   loggedAt: Timestamp;
   dateKey: string;
+  /** Original portion/preparation notes the user typed when logging. */
+  notes?: string;
 };
 
 export type WeightEntry = {

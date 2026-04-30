@@ -118,7 +118,7 @@ export default function TodayPage() {
       <FoodCapture
         open={captureOpen}
         onClose={() => setCaptureOpen(false)}
-        onLogged={async (result) => {
+        onLogged={async (result, notes) => {
           await logMeal({
             name: result.name,
             calories: result.calories,
@@ -127,6 +127,7 @@ export default function TodayPage() {
             fat: result.fat_g,
             imageUrl: result.imageUrl,
             confidence: result.confidence,
+            notes: notes || undefined,
           });
         }}
       />

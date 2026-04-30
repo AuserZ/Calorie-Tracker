@@ -60,16 +60,32 @@ Open http://localhost:3000. The app will prompt you to enter your profile (age, 
 ```
 Browser  ──photo──►  /api/analyze  ──►  Gemini Flash (server-side key)
                           │
-                          ├─► saves image to public/meals/<id>.jpg
+                          ├─► writes image to MEALS_DIR/<id>.jpg
                           └─► returns { name, kcal, macros, confidence, imageUrl }
    │
-   └──► Firestore (meal doc references imageUrl, no Storage)
+   ├──► Firestore             (meal doc references imageUrl, no Storage)
+   └──► /meals/<id>.jpg       → rewritten to /api/meals/<id>
+                                streams the file from MEALS_DIR
 ```
 
 - The Gemini key never reaches the browser — only `/api/analyze` can call Gemini.
-- Food images are written to `public/meals/` on the server's filesystem and served as static files. **Vercel and most serverless hosts have read-only filesystems**, so this app is best run locally (or on a long-running Node server / VPS).
+- Food images live on the server's filesystem at `MEALS_DIR` (default: `public/meals/`). The streaming GET handler at `/api/meals/[filename]` reads from disk on demand; a Next.js rewrite makes the public URL stay `/meals/<filename>` regardless of where the file actually lives.
+- **Vercel and most serverless hosts have read-only filesystems**, so this app is best run on a long-running Node server / VPS.
 - Firestore talks directly to the browser via the Firebase Web SDK. Lock it down with security rules (see below).
 - Single user model: everything is under `users/owner/...` in Firestore. There is no auth.
+
+### Persistent image storage on a VPS
+
+`git pull && npm run build` will wipe `public/meals/`. To keep meal photos across deploys, point `MEALS_DIR` at a path **outside** the repo:
+
+```bash
+sudo mkdir -p /var/lib/eaten/uploads
+sudo chown -R $USER:$USER /var/lib/eaten
+echo "MEALS_DIR=/var/lib/eaten/uploads" >> .env.local
+pm2 restart eaten-app
+```
+
+Existing Firestore records with URLs like `/meals/123-abc.jpg` keep working — the rewrite + streaming handler resolve them against the new location automatically.
 
 ### Firestore layout
 

@@ -9,7 +9,8 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onLogged: (
-    result: Extract<AnalysisResult, { ok: true }>
+    result: Extract<AnalysisResult, { ok: true }>,
+    notes: string
   ) => Promise<void>;
 };
 
@@ -81,7 +82,7 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
     if (!result || !result.ok) return;
     setSaving(true);
     try {
-      await onLogged(result);
+      await onLogged(result, notes.trim());
       handleClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save meal.");

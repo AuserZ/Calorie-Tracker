@@ -40,17 +40,37 @@ export async function logMeal(meal: {
   fat: number;
   imageUrl: string;
   confidence: Meal["confidence"];
+  notes?: string;
 }): Promise<void> {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  await setDoc(doc(mealsCol(), id), {
+  // Strip undefined fields — Firestore rejects them.
+  const payload: Record<string, unknown> = {
     ...meal,
     loggedAt: serverTimestamp(),
     dateKey: todayKey(),
-  });
+  };
+  if (!payload.notes) delete payload.notes;
+  await setDoc(doc(mealsCol(), id), payload);
 }
 
 export async function deleteMeal(id: string): Promise<void> {
   await deleteDoc(doc(mealsCol(), id));
+}
+
+export async function getMeal(id: string): Promise<Meal | null> {
+  const snap = await getDoc(doc(mealsCol(), id));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...(snap.data() as Omit<Meal, "id">) };
+}
+
+export function subscribeMeal(
+  id: string,
+  cb: (meal: Meal | null) => void
+): () => void {
+  return onSnapshot(doc(mealsCol(), id), (snap) => {
+    if (!snap.exists()) cb(null);
+    else cb({ id: snap.id, ...(snap.data() as Omit<Meal, "id">) });
+  });
 }
 
 export function subscribeMealsForDay(
