@@ -36,8 +36,8 @@ export default function RootLayout({
       className={`${barlow.variable} ${barlowCondensed.variable} h-full antialiased`}
     >
       <body className="min-h-dvh flex flex-col bg-bg text-ink">
-        <main className="flex-1 pb-24 md:pb-8 md:pl-64">{children}</main>
         <BottomNav />
+        <main className="flex-1 pb-24 md:pb-8">{children}</main>
       </body>
     </html>
   );
