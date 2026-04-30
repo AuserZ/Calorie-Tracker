@@ -33,9 +33,16 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# editor / tooling
+.claude/
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# user-uploaded food images (saved locally by /api/analyze)
+/public/meals/
+.vscode/settings.json
