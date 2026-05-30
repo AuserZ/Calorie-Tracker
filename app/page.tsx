@@ -233,45 +233,23 @@ export default function TodayPage() {
       <button
         onClick={() => setCaptureOpen(true)}
         aria-label="Log a meal"
-        className="fixed z-[4] cursor-pointer border-none text-cream items-center justify-center"
+        className="fixed z-[4] cursor-pointer border-none text-cream flex items-center justify-center md:bottom-6 bottom-[94px]"
         style={{
-          bottom: 80,
-          left: "50%",
-          transform: "translateX(-50%)",
+          right: 20,
           width: 56,
           height: 56,
           borderRadius: 9999,
-          background: "linear-gradient(135deg, var(--color-ink) 30%, #2a2a2a)",
+          background: "var(--color-ink)",
           boxShadow:
             "0 8px 20px rgba(255,106,26,.4), 0 1px 0 rgba(255,255,255,.15) inset",
           animation: "float 3.4s ease-in-out infinite",
         }}
       >
-        {/* Conic gradient border */}
-        <span
-          aria-hidden
-          className="absolute rounded-full"
-          style={{
-            inset: -2,
-            background:
-              "conic-gradient(from 0deg, var(--color-tang), var(--color-lime), var(--color-blue), var(--color-tang))",
-            animation: "spinSlow 6s linear infinite",
-            zIndex: -1,
-            opacity: 0.85,
-            filter: "blur(2px)",
-          }}
-        />
-        <span
-          aria-hidden
-          className="absolute rounded-full bg-ink"
-          style={{ inset: 2, zIndex: -1 }}
-        />
         <svg
           width="22"
           height="22"
           viewBox="0 0 24 24"
           fill="none"
-          className="relative"
         >
           <rect
             x="3"
