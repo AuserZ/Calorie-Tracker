@@ -17,6 +17,7 @@ export default function ProfileSetup({
   initialWeightKg,
   onSave,
 }: Props) {
+  const [name, setName] = useState(initial?.name ?? "");
   const [age, setAge] = useState(initial?.age?.toString() ?? "30");
   const [sex, setSex] = useState<Profile["sex"]>(initial?.sex ?? "male");
   const [heightCm, setHeightCm] = useState(
@@ -37,6 +38,7 @@ export default function ProfileSetup({
     e.preventDefault();
     setErr(null);
     const profile: Profile = {
+      name: name.trim() || "Friend",
       age: Number(age),
       sex,
       heightCm: Number(heightCm),
@@ -68,6 +70,14 @@ export default function ProfileSetup({
         We need a few details to estimate your daily calorie target.
       </p>
       <form onSubmit={submit} className="flex flex-col gap-3">
+        <Input
+          id="name"
+          label="Your name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="How should we call you?"
+        />
         <div className="grid grid-cols-2 gap-3">
           <Input
             id="age"

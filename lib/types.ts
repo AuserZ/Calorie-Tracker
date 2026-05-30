@@ -7,6 +7,7 @@ export type Confidence = "low" | "medium" | "high";
 export type Verdict = "under" | "on-track" | "over" | "way-over";
 
 export type Profile = {
+  name: string;
   heightCm: number;
   age: number;
   sex: Sex;

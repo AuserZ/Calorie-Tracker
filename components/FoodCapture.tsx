@@ -1,6 +1,5 @@
 "use client";
 import { useRef, useState } from "react";
-import { Camera, X, Loader2, Sparkles } from "lucide-react";
 import Button from "./ui/Button";
 import UtensilsReference from "./UtensilsReference";
 import type { AnalysisResult } from "@/lib/types";
@@ -23,6 +22,8 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [imgIdx, setImgIdx] = useState(0);
 
   function reset() {
     setFile(null);
@@ -39,8 +40,12 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
   }
 
   function handleClose() {
-    reset();
-    onClose();
+    setClosing(true);
+    setTimeout(() => {
+      reset();
+      onClose();
+      setClosing(false);
+    }, 300);
   }
 
   function pick(f: File) {
@@ -49,6 +54,7 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
     setPreviewUrl(URL.createObjectURL(f));
     setResult(null);
     setError(null);
+    setImgIdx(0);
   }
 
   async function analyze() {
@@ -90,178 +96,420 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
     }
   }
 
+  const step = result?.ok
+    ? "result"
+    : analyzing
+    ? "analyzing"
+    : "camera";
+
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4"
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center overflow-hidden"
+      style={{
+        background: closing ? "transparent" : "rgba(15,14,10,.45)",
+        backdropFilter: closing ? "none" : "blur(8px)",
+        WebkitBackdropFilter: closing ? "none" : "blur(8px)",
+        animation: closing ? "fadeOut .3s" : "fadeIn .25s",
+        pointerEvents: closing ? "none" : "auto",
+      }}
       onClick={handleClose}
     >
       <div
-        className="bg-surface w-full md:max-w-md rounded-t-2xl md:rounded-2xl border border-line max-h-[92dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
+        className="w-full md:max-w-md bg-cream flex flex-col overflow-y-auto"
+        style={{
+          borderRadius: "28px 28px 0 0",
+          padding: "14px 20px 30px",
+          animation: closing ? "sheetDown .32s cubic-bezier(.4,0,1,1)" : "sheetUp .42s cubic-bezier(.2,.8,.2,1)",
+          maxHeight: "90%",
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Log a meal"
       >
-        <header className="flex items-center justify-between p-4 border-b border-line sticky top-0 bg-surface">
-          <h2 className="font-display font-bold text-xl">Log a meal</h2>
+        {/* Drag handle */}
+        <div
+          className="w-11 h-[5px] rounded-full mx-auto mb-3.5 mt-1"
+          style={{ background: "rgba(21,20,15,.18)" }}
+        />
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="serif text-[30px] leading-none tracking-tight m-0">
+            {step === "camera" && "Snap a meal"}
+            {step === "analyzing" && (
+              <em style={{ color: "var(--color-tang)" }}>Tasting…</em>
+            )}
+            {step === "result" && "Here's what I see"}
+          </h2>
           <button
-            type="button"
-            onClick={handleClose}
             aria-label="Close"
-            className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-lg text-ink-soft hover:bg-line/60 active:scale-95 transition cursor-pointer"
+            onClick={handleClose}
+            className="w-9 h-9 rounded-full bg-ink/[.06] border-none text-ink cursor-pointer flex items-center justify-center hover:bg-ink/10 transition"
           >
-            <X size={20} />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M5 5l14 14M19 5L5 19"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
           </button>
-        </header>
+        </div>
 
-        <div className="p-4 flex flex-col gap-4">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) pick(f);
-            }}
-          />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) pick(f);
+          }}
+        />
 
-          {!previewUrl ? (
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="aspect-square w-full rounded-card border-2 border-dashed border-line bg-bg flex flex-col items-center justify-center gap-2 text-ink-soft hover:border-primary hover:text-primary active:scale-[0.99] transition cursor-pointer"
-            >
-              <Camera size={48} />
-              <span className="font-display font-semibold uppercase tracking-wide">
-                Take a photo
-              </span>
-              <span className="text-xs">or pick from gallery</span>
-            </button>
-          ) : (
-            <div className="relative aspect-square w-full rounded-card overflow-hidden bg-line">
+        {/* Photo area */}
+        <div
+          className="relative overflow-hidden mb-3.5"
+          style={{
+            aspectRatio: "4/3",
+            borderRadius: 22,
+            background: "var(--color-cream-2)",
+          }}
+        >
+          {previewUrl ? (
+            <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={previewUrl}
                 alt="Food preview"
                 className="w-full h-full object-cover"
+                style={{
+                  transform:
+                    step === "analyzing" ? "scale(1.04)" : "scale(1)",
+                  transition: "transform 1.2s ease-out",
+                }}
               />
-              {analyzing && (
-                <div className="absolute inset-0 bg-ink/60 flex flex-col items-center justify-center text-white gap-2">
-                  <Loader2 className="animate-spin" size={36} />
-                  <span className="font-display font-semibold uppercase tracking-wide">
-                    Analyzing…
-                  </span>
-                </div>
+              {step === "analyzing" && (
+                <>
+                  {/* Scan line */}
+                  <div
+                    className="absolute left-0 right-0"
+                    style={{
+                      height: 80,
+                      background:
+                        "linear-gradient(180deg,transparent,rgba(255,162,69,.5),transparent)",
+                      animation:
+                        "scanline 1.6s ease-in-out infinite alternate",
+                    }}
+                  />
+                  {/* Corner brackets */}
+                  {(
+                    [
+                      { top: 12, left: 12, bw: "2px 0 0 2px" },
+                      { top: 12, right: 12, bw: "2px 2px 0 0" },
+                      { bottom: 12, left: 12, bw: "0 0 2px 2px" },
+                      { bottom: 12, right: 12, bw: "0 2px 2px 0" },
+                    ] as const
+                  ).map(({ bw, ...pos }, i) => (
+                    <span
+                      key={i}
+                      className="absolute"
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderColor: "var(--color-lime)",
+                        borderStyle: "solid",
+                        borderWidth: bw,
+                        ...pos,
+                        animation: "fadeIn .3s",
+                      }}
+                    />
+                  ))}
+                  {/* Status text */}
+                  <div className="absolute bottom-[18px] left-0 right-0 flex justify-center gap-2 items-center text-white">
+                    <span
+                      className="rounded-full"
+                      style={{
+                        width: 8,
+                        height: 8,
+                        background: "var(--color-lime)",
+                        animation: "pulseRing 1.4s infinite",
+                      }}
+                    />
+                    <span
+                      className="mono text-[11px] tracking-[.18em] uppercase"
+                      style={{
+                        textShadow: "0 1px 6px rgba(0,0,0,.6)",
+                      }}
+                    >
+                      Detecting · Counting · Estimating
+                    </span>
+                  </div>
+                </>
               )}
-            </div>
-          )}
-
-          <label htmlFor="meal-notes" className="flex flex-col gap-1">
-            <span className="font-medium text-ink-soft uppercase tracking-wide text-xs">
-              Details (optional)
-            </span>
-            <textarea
-              id="meal-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              maxLength={1000}
-              rows={3}
-              placeholder="e.g. 2 sendok makan rice, fried in 1 sendok teh oil, 1 piring kecil — helps the AI estimate portions"
-              disabled={analyzing}
-              className="w-full px-3 py-2 rounded-lg border border-line bg-surface text-ink resize-y focus:outline-2 focus:outline-offset-2 focus:outline-primary placeholder:text-ink-soft/60 text-sm leading-snug disabled:opacity-60"
-            />
-            <span className="text-[11px] text-ink-soft tabular-nums self-end">
-              {notes.length}/1000
-            </span>
-          </label>
-
-          <UtensilsReference />
-
-          {error && (
-            <div
-              role="alert"
-              className="bg-bad/10 text-bad rounded-lg p-3 text-sm"
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="w-full h-full flex flex-col items-center justify-center gap-2 text-ink-soft hover:text-tang transition cursor-pointer"
             >
-              {error}
-            </div>
-          )}
-
-          {result && result.ok && (
-            <div className="bg-bg rounded-card p-3 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <Sparkles size={16} className="text-cta" />
-                <span className="font-semibold">{result.name}</span>
-              </div>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                <Stat label="kcal" value={result.calories} big />
-                <Stat label="P" value={`${result.protein_g}g`} />
-                <Stat label="C" value={`${result.carbs_g}g`} />
-                <Stat label="F" value={`${result.fat_g}g`} />
-              </div>
-              <div className="text-xs text-ink-soft">
-                Confidence: {result.confidence}
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            {previewUrl && !result?.ok && (
-              <Button
-                variant="primary"
-                block
-                disabled={!file || analyzing}
-                onClick={analyze}
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                className="opacity-50"
               >
-                {analyzing ? "Analyzing…" : "Analyze"}
-              </Button>
-            )}
-            {result?.ok && (
-              <>
-                <Button variant="ghost" onClick={() => fileRef.current?.click()}>
-                  Retake
-                </Button>
-                <Button
-                  variant="cta"
-                  block
-                  disabled={saving}
-                  onClick={save}
-                >
-                  {saving ? "Saving…" : "Log this meal"}
-                </Button>
-              </>
-            )}
-          </div>
+                <rect
+                  x="3"
+                  y="6.5"
+                  width="18"
+                  height="13"
+                  rx="3"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+                <path
+                  d="M8 6.5l1.5-2h5L16 6.5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+                <circle
+                  cx="12"
+                  cy="13"
+                  r="3.4"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+              </svg>
+              <span className="font-semibold text-sm">
+                Take a photo
+              </span>
+              <span className="text-xs">or pick from gallery</span>
+            </button>
+          )}
         </div>
-      </div>
-    </div>
-  );
-}
 
-function Stat({
-  label,
-  value,
-  big,
-}: {
-  label: string;
-  value: number | string;
-  big?: boolean;
-}) {
-  return (
-    <div className="bg-surface rounded-lg p-2">
-      <div
-        className={
-          (big ? "text-2xl " : "text-base ") +
-          "font-display font-bold tabular-nums"
-        }
-      >
-        {value}
-      </div>
-      <div className="text-[10px] uppercase tracking-wide text-ink-soft">
-        {label}
+        {/* Photo thumbnail selector */}
+        {previewUrl && step === "camera" && (
+          <div className="flex gap-2 mb-3.5">
+            {[0, 1, 2].map((i) => (
+              <button
+                key={i}
+                onClick={() => fileRef.current?.click()}
+                className={`relative rounded-xl overflow-hidden border-2 transition ${
+                  imgIdx === i ? "border-tang" : "border-transparent"
+                }`}
+                style={{ width: 64, height: 64 }}
+              >
+                {imgIdx === i && previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previewUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-cream-2 flex items-center justify-center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Notes textarea */}
+        {step !== "analyzing" && (
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add details — '2 sendok rice, 1 telur ceplok'…"
+            className="w-full p-3 rounded-2xl border border-line bg-surface text-ink text-[13px] resize-none outline-none mb-3.5 placeholder:text-ink-soft/60"
+            style={{ minHeight: 64, fontFamily: "inherit" }}
+          />
+        )}
+
+        <UtensilsReference />
+
+        {/* Error */}
+        {error && (
+          <div
+            role="alert"
+            className="bg-bad/10 text-bad rounded-2xl p-3 text-sm mt-3"
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Result card */}
+        {result?.ok && (
+          <div
+            className="bg-surface rounded-[20px] p-3.5 border border-line mt-3"
+            style={{ animation: "scaleIn .4s cubic-bezier(.2,.8,.2,1)" }}
+          >
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="text-lg">✨</span>
+              <span
+                className="serif text-[22px]"
+                style={{ fontStyle: "italic" }}
+              >
+                {result.name}
+              </span>
+              <span className="ml-auto">
+                <span
+                  className="text-[11px] px-2.5 py-1 rounded-full font-bold tracking-[.04em]"
+                  style={{
+                    background: "rgba(31,179,107,.12)",
+                    color: "#0F8F4D",
+                  }}
+                >
+                  High match
+                </span>
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                {
+                  label: "kcal",
+                  val: result.calories,
+                  big: true,
+                },
+                { label: "P", val: `${result.protein_g}g` },
+                { label: "C", val: `${result.carbs_g}g` },
+                { label: "F", val: `${result.fat_g}g` },
+              ].map((s, i) => (
+                <div
+                  key={i}
+                  className="bg-cream rounded-[14px] p-2.5 text-center"
+                >
+                  <div
+                    className="serif tnum"
+                    style={{
+                      fontSize: s.big ? 28 : 18,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {s.val}
+                  </div>
+                  <div className="text-[9px] tracking-[.12em] uppercase text-ink-soft font-bold mt-1">
+                    {s.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2 mt-3.5">
+          {step === "camera" && previewUrl && (
+            <Button
+              variant="cta"
+              block
+              disabled={!file || analyzing}
+              onClick={analyze}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M5 4l3-2h8l3 2M3 6h18v14H3V6zm9 4a4 4 0 100 8 4 4 0 000-8z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+              </svg>
+              Analyze this
+            </Button>
+          )}
+          {step === "camera" && !previewUrl && (
+            <Button
+              variant="cta"
+              block
+              onClick={() => fileRef.current?.click()}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <rect
+                  x="3"
+                  y="6.5"
+                  width="18"
+                  height="13"
+                  rx="3"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+                <path
+                  d="M8 6.5l1.5-2h5L16 6.5"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+                <circle
+                  cx="12"
+                  cy="13"
+                  r="3.4"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+              </svg>
+              Take a photo
+            </Button>
+          )}
+          {step === "analyzing" && (
+            <Button variant="soft" block disabled>
+              <span className="inline-flex gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="rounded-full"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      background: "var(--color-tang)",
+                      animation: `pulseRing 1.2s ${i * 0.15}s infinite`,
+                    }}
+                  />
+                ))}
+              </span>
+              <span className="ml-2">Finding flavor…</span>
+            </Button>
+          )}
+          {step === "result" && (
+            <>
+              <Button
+                variant="soft"
+                onClick={() => setResult(null)}
+              >
+                Retake
+              </Button>
+              <Button
+                variant="cta"
+                block
+                disabled={saving}
+                onClick={save}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="M5 12l5 5L20 7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {saving ? "Saving…" : "Log it"}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

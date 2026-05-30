@@ -1,48 +1,159 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #f8fafc;
-  --color-ink: #1e293b;
-  --color-ink-soft: #475569;
-  --color-line: #e2e8f0;
-  --color-surface: #ffffff;
+  /* ─── Palette ─────────────────────────────── */
+  --color-cream: #FFF6E6;
+  --color-cream-2: #FBEBCB;
+  --color-ink: #15140F;
+  --color-ink-2: #3A372E;
+  --color-ink-soft: #7A7565;
+  --color-line: rgba(21,20,15,.10);
+  --color-surface: #FFFDF8;
+  --color-bg: #FFF6E6;
 
-  --color-primary: #2563eb;
-  --color-primary-soft: #3b82f6;
-  --color-cta: #f97316;
-  --color-cta-press: #ea580c;
+  --color-blue: #2E5BFF;
+  --color-blue-2: #5B7FFF;
+  --color-tang: #FF6A1A;
+  --color-tang-2: #FFA245;
+  --color-lime: #C8E84A;
+  --color-plum: #3F0F47;
 
-  --color-good: #10b981;
-  --color-warn: #f59e0b;
-  --color-bad: #ef4444;
+  --color-good: #1FB36B;
+  --color-warn: #F2A33A;
+  --color-bad: #E64646;
 
-  --font-display: var(--font-barlow-condensed), system-ui, sans-serif;
-  --font-body: var(--font-barlow), system-ui, sans-serif;
+  /* legacy aliases used by existing code */
+  --color-primary: #2E5BFF;
+  --color-primary-soft: #5B7FFF;
+  --color-cta: #FF6A1A;
+  --color-cta-press: #E85A10;
 
-  --radius-card: 0.75rem;
+  /* ─── Typography ──────────────────────────── */
+  --font-body: var(--font-inter), 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif), 'Instrument Serif', ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, monospace;
+  /* keep --font-display for backwards compat but point to serif */
+  --font-display: var(--font-serif);
+
+  /* ─── Radii ───────────────────────────────── */
+  --radius-card: 1.25rem;
+  --radius-pill: 9999px;
 }
 
+/* ─── Base ────────────────────────────────────── */
 html,
 body {
-  background: var(--color-bg);
+  background: var(--color-cream);
   color: var(--color-ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-display);
+h1, h2, h3, h4 {
+  font-family: var(--font-serif);
   letter-spacing: -0.01em;
 }
 
+/* ─── Utility classes ─────────────────────────── */
+.serif  { font-family: var(--font-serif); font-weight: 400; letter-spacing: -0.01em; }
+.mono   { font-family: var(--font-mono); }
+.tnum   { font-variant-numeric: tabular-nums; }
+
+/* ─── Scrollbar hide (for frame-scroll) ───────── */
+.scroll-hide::-webkit-scrollbar { width: 0; height: 0; }
+.scroll-hide { scrollbar-width: none; }
+
+/* ─── Keyframe animations ─────────────────────── */
+@keyframes blob1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.08); }
+  66% { transform: translate(-20px, 25px) scale(0.95); }
+}
+@keyframes blob2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-25px, 30px) scale(1.1); }
+}
+@keyframes spinSlow { to { transform: rotate(360deg); } }
+@keyframes pulseRing {
+  0%   { transform: scale(1); opacity: .6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes shine {
+  0%        { transform: translateX(-110%); }
+  60%, 100% { transform: translateX(110%); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes confettiFall {
+  0%   { transform: translate3d(var(--cx, 0), -20px, 0) rotate(0); opacity: 1; }
+  100% { transform: translate3d(calc(var(--cx, 0) + var(--dx, 40px)), 120vh, 0) rotate(720deg); opacity: 0; }
+}
+@keyframes scanline {
+  0%   { top: 0%; }
+  100% { top: 100%; }
+}
+@keyframes liquidWave {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes kenburns {
+  from { transform: scale(1.04) translateY(0); }
+  to   { transform: scale(1.12) translateY(-2%); }
+}
+@keyframes barGrow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes drawLine {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes sheetDown {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: .4; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes wiggleFork {
+  0%, 100% { transform: rotate(-6deg); }
+  50%      { transform: rotate(6deg); }
+}
+
+/* ─── Reduced motion ──────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0ms !important;
-    transition-duration: 0ms !important;
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
   }
 }
