@@ -144,7 +144,7 @@ export default function BottomNav() {
           paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))",
         }}
       >
-        <div className="flex justify-around items-center py-2.5 px-4">
+        <div className="flex justify-around items-center py-1.5 px-4">
           {items.map(({ href, label, Icon }) => {
             const active = isActive(href);
             return (

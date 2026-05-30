@@ -63,7 +63,7 @@ export default function WeightPage() {
   }
 
   return (
-    <div className="relative min-h-full md:ml-60">
+    <div className="relative min-h-screen md:ml-60">
       {/* Floating blob */}
       <div
         aria-hidden

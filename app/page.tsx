@@ -86,7 +86,7 @@ export default function TodayPage() {
   });
 
   return (
-    <div className="relative min-h-full md:ml-60">
+    <div className="relative min-h-screen md:ml-60">
       {/* Floating gradient blobs */}
       <div
         aria-hidden
@@ -233,17 +233,17 @@ export default function TodayPage() {
       <button
         onClick={() => setCaptureOpen(true)}
         aria-label="Log a meal"
-        className="hidden md:flex fixed z-[4] cursor-pointer border-none text-cream items-center justify-center"
+        className="fixed z-[4] cursor-pointer border-none text-cream items-center justify-center"
         style={{
-          bottom: 28,
+          bottom: 80,
           left: "50%",
           transform: "translateX(-50%)",
-          width: 64,
-          height: 64,
+          width: 56,
+          height: 56,
           borderRadius: 9999,
           background: "linear-gradient(135deg, var(--color-ink) 30%, #2a2a2a)",
           boxShadow:
-            "0 12px 28px rgba(255,106,26,.45), 0 1px 0 rgba(255,255,255,.15) inset",
+            "0 8px 20px rgba(255,106,26,.4), 0 1px 0 rgba(255,255,255,.15) inset",
           animation: "float 3.4s ease-in-out infinite",
         }}
       >
@@ -267,8 +267,8 @@ export default function TodayPage() {
           style={{ inset: 2, zIndex: -1 }}
         />
         <svg
-          width="26"
-          height="26"
+          width="22"
+          height="22"
           viewBox="0 0 24 24"
           fill="none"
           className="relative"

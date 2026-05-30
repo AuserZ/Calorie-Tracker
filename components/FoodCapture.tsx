@@ -353,7 +353,7 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
             className="bg-surface rounded-[20px] p-3.5 border border-line mt-3"
             style={{ animation: "scaleIn .4s cubic-bezier(.2,.8,.2,1)" }}
           >
-            <div className="flex items-center gap-2 mb-2.5">
+            <div className="flex items-center gap-2 mb-2.5 flex-nowrap">
               <span className="text-lg">✨</span>
               <span
                 className="serif text-[22px]"
@@ -361,12 +361,13 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
               >
                 {result.name}
               </span>
-              <span className="ml-auto">
+              <span className="shrink-0">
                 <span
                   className="text-[11px] px-2.5 py-1 rounded-full font-bold tracking-[.04em]"
                   style={{
                     background: "rgba(31,179,107,.12)",
                     color: "#0F8F4D",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   High match

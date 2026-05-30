@@ -1,0 +1,18 @@
+services:
+  eaten:
+    image: docker.io/auserz/eaten:latest
+    container_name: eaten-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - MEALS_DIR=/app/public/meals
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"

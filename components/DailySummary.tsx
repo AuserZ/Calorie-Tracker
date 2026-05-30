@@ -322,7 +322,7 @@ export default function DailySummary({
     <div className="flex flex-col gap-4">
       {/* Hero ring card */}
       <section
-        className="relative overflow-hidden bg-surface rounded-[28px] border border-line p-6"
+        className="relative overflow-hidden bg-surface rounded-[28px] border border-line p-5"
         style={{
           boxShadow:
             "0 1px 0 rgba(255,255,255,.7) inset, 0 12px 30px -16px rgba(21,20,15,.18)",
@@ -342,7 +342,7 @@ export default function DailySummary({
         {showConfetti && <ConfettiBurst />}
 
         <div className="relative flex justify-center">
-          <DailyRing eaten={eaten} target={target} size={228} />
+          <DailyRing eaten={eaten} target={target} size={200} />
         </div>
 
         {/* Verdict pill */}

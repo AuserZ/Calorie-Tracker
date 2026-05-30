@@ -1,31 +1,53 @@
 FROM node:22-alpine AS base
 
-# ─── Dependencies ──────────────────────────────────────────
-FROM base AS deps
 WORKDIR /app
+
+# Install deps (layer cache friendly)
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-# ─── Builder ───────────────────────────────────────────────
-FROM deps AS builder
-WORKDIR /app
+# Copy source and build
 COPY . .
 RUN npm run build
 
 # ─── Runner ────────────────────────────────────────────────
 FROM base AS runner
-WORKDIR /app
+
+ARG FIREBASE_API_KEY
+ARG FIREBASE_AUTH_DOMAIN
+ARG FIREBASE_PROJECT_ID
+ARG FIREBASE_STORAGE_BUCKET
+ARG FIREBASE_MESSAGING_SENDER_ID
+ARG FIREBASE_APP_ID
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+ARG NEXT_PUBLIC_FIREBASE_APP_ID
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV FIREBASE_API_KEY="$FIREBASE_API_KEY"
+ENV FIREBASE_AUTH_DOMAIN="$FIREBASE_AUTH_DOMAIN"
+ENV FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID"
+ENV FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET"
+ENV FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID"
+ENV FIREBASE_APP_ID="$FIREBASE_APP_ID"
+ENV NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY"
+ENV NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"
+ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID="$NEXT_PUBLIC_FIREBASE_PROJECT_ID"
+ENV NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"
+ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"
+ENV NEXT_PUBLIC_FIREBASE_APP_ID="$NEXT_PUBLIC_FIREBASE_APP_ID"
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser  --system --uid 1001 nextjs
 
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=base --chown=nextjs:nodejs /app/public ./public
+COPY --from=base --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=base --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 EXPOSE 3000

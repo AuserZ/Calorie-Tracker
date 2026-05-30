@@ -83,7 +83,7 @@ export default function HistoryPage() {
   const maxTotal = Math.max(...days.map((d) => d.total), 1);
 
   return (
-    <div className="relative min-h-full md:ml-60">
+    <div className="relative min-h-screen md:ml-60">
       <div className="relative max-w-2xl mx-auto px-4 pt-3.5 pb-8 flex flex-col gap-3.5">
         {/* Top bar */}
         <div className="flex items-center justify-between md:hidden">

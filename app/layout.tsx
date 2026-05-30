@@ -58,7 +58,7 @@ export default function RootLayout({
         }}
       >
         <BottomNav />
-        <main className="flex-1 pb-24 md:pb-8">{children}</main>
+        <div className="flex-1 pb-24 md:pb-8">{children}</div>
       </body>
     </html>
   );

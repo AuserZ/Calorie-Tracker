@@ -36,7 +36,7 @@ export default function UtensilsReference() {
         />
       </button>
       {open && (
-        <div className="border-t border-line p-3 flex flex-col gap-3">
+        <div className="border-t border-line p-3 flex flex-col gap-3 overflow-y-auto" style={{ maxHeight: 260 }}>
           {(Object.keys(UTENSILS) as UtensilGroup[]).map((group) => (
             <div key={group}>
               <h4 className="font-display font-semibold uppercase tracking-wide text-xs text-ink-soft mb-1">
