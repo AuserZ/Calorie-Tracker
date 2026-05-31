@@ -24,6 +24,7 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
   const [imgIdx, setImgIdx] = useState(0);
+  const [compressing, setCompressing] = useState(false);
 
   function reset() {
     setFile(null);
@@ -36,6 +37,7 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
     setError(null);
     setAnalyzing(false);
     setSaving(false);
+    setCompressing(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -50,11 +52,67 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
 
   function pick(f: File) {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setFile(f);
-    setPreviewUrl(URL.createObjectURL(f));
+    const url = URL.createObjectURL(f);
+    // Compress to max 1.5MB if over 1MB so upload always succeeds
+    if (f.size > 5 * 1024 * 1024) {
+      setCompressing(true);
+      compressImage(url, 1024 * 1024 * 1.5).then((compressed) => {
+        setFile(compressed.file);
+        setPreviewUrl(compressed.url);
+        setCompressing(false);
+      });
+    } else {
+      setFile(f);
+      setPreviewUrl(url);
+    }
     setResult(null);
     setError(null);
     setImgIdx(0);
+  }
+
+  function compressImage(
+    url: string,
+    maxSizeBytes: number
+  ): Promise<{ file: File; url: string }> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+        const MAX_DIM = 1600;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          const scale = MAX_DIM / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, width, height);
+        let quality = 0.85;
+        const tryWrite = () => {
+          canvas.toBlob(
+            (blob) => {
+              if (!blob || blob.size <= maxSizeBytes || quality <= 0.3) {
+                const file = new File(
+                  [blob ?? new Blob()],
+                  "photo.jpg",
+                  { type: "image/jpeg" }
+                );
+                resolve({ file, url });
+                return;
+              }
+              quality -= 0.1;
+              tryWrite();
+            },
+            "image/jpeg",
+            quality
+          );
+        };
+        tryWrite();
+      };
+      img.src = url;
+    });
   }
 
   async function analyze() {
@@ -66,7 +124,28 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
       fd.append("image", file);
       if (notes.trim()) fd.append("notes", notes.trim());
       const res = await fetch("/api/analyze", { method: "POST", body: fd });
-      const json = (await res.json()) as AnalysisResult;
+
+      let json: AnalysisResult;
+      try {
+        json = (await res.json()) as AnalysisResult;
+      } catch {
+        const bodyText = await res.text().catch(() => "");
+        let msg = "";
+        if (res.status === 413) {
+          msg = "Photo is too large. Try taking a smaller photo or reducing the image quality in your camera settings.";
+        } else if (res.status === 0) {
+          msg = "Network error — check your connection and try again.";
+        } else if (res.status >= 500) {
+          msg = "Server error. Try again in a moment.";
+        } else {
+          msg = bodyText || `Request failed (${res.status})`;
+        }
+        setError(msg);
+        setResult(null);
+        setAnalyzing(false);
+        return;
+      }
+
       if (!json.ok) {
         setError(
           json.error === "not_food"
@@ -78,7 +157,13 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
         setResult(json);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Network error");
+      setError(
+        e instanceof TypeError && e.message.includes("fetch")
+          ? "Network error — check your connection and try again."
+          : e instanceof Error
+          ? e.message
+          : "Network error"
+      );
     } finally {
       setAnalyzing(false);
     }
@@ -178,6 +263,7 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
             aspectRatio: "4/3",
             borderRadius: 22,
             background: "var(--color-cream-2)",
+            touchAction: "manipulation",
           }}
         >
           {previewUrl ? (
@@ -186,13 +272,29 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
               <img
                 src={previewUrl}
                 alt="Food preview"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover pointer-events-none"
                 style={{
                   transform:
                     step === "analyzing" ? "scale(1.04)" : "scale(1)",
                   transition: "transform 1.2s ease-out",
                 }}
               />
+              {compressing && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-ink/40 rounded-[22px]">
+                  <div
+                    className="rounded-full"
+                    style={{
+                      width: 12,
+                      height: 12,
+                      background: "var(--color-tang)",
+                      animation: "pulseRing 1s infinite",
+                    }}
+                  />
+                  <span className="text-white text-xs font-semibold tracking-wide">
+                    Optimizing photo…
+                  </span>
+                </div>
+              )}
               {step === "analyzing" && (
                 <>
                   {/* Scan line */}
@@ -256,7 +358,14 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="w-full h-full flex flex-col items-center justify-center gap-2 text-ink-soft hover:text-tang transition cursor-pointer"
+              style={{
+                width: "100%",
+                height: "100%",
+                fontSize: 16,
+                minHeight: "44px",
+                touchAction: "manipulation",
+              }}
+              className="flex flex-col items-center justify-center gap-2 text-ink-soft hover:text-tang transition cursor-pointer"
             >
               <svg
                 width="48"
@@ -288,9 +397,7 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
                   strokeWidth="1.4"
                 />
               </svg>
-              <span className="font-semibold text-sm">
-                Take a photo
-              </span>
+              <span className="font-semibold text-sm">Take a photo</span>
               <span className="text-xs">or pick from gallery</span>
             </button>
           )}
@@ -303,10 +410,10 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
               <button
                 key={i}
                 onClick={() => fileRef.current?.click()}
+                style={{ width: 64, height: 64, touchAction: "manipulation" }}
                 className={`relative rounded-xl overflow-hidden border-2 transition ${
                   imgIdx === i ? "border-tang" : "border-transparent"
                 }`}
-                style={{ width: 64, height: 64 }}
               >
                 {imgIdx === i && previewUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -412,7 +519,7 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
             <Button
               variant="cta"
               block
-              disabled={!file || analyzing}
+              disabled={!file || analyzing || compressing}
               onClick={analyze}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">

@@ -5,9 +5,6 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
-      - MEALS_DIR=/app/public/meals
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
     deploy:
       resources:
         limits:

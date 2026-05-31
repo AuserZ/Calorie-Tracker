@@ -7,7 +7,11 @@ import { resolveMealsDir } from "@/lib/paths";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const MAX_BYTES = 8 * 1024 * 1024;
+// Handle large bodies (up to 20MB) by parsing manually, bypassing
+// Next.js's default 1MB body parser limit.
+export const bodySizeLimit: string = "20mb";
+
+const MAX_BYTES = 20 * 1024 * 1024;
 
 const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
