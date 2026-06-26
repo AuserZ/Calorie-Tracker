@@ -285,16 +285,34 @@ export default function TodayPage() {
       <FoodCapture
         open={captureOpen}
         onClose={() => setCaptureOpen(false)}
-        onLogged={async (result, notes) => {
+        onLogged={async (items, notes) => {
+          const totals = items.reduce(
+            (acc, it) => ({
+              cal: acc.cal + it.calories,
+              protein: acc.protein + it.protein_g,
+              carbs: acc.carbs + it.carbs_g,
+              fat: acc.fat + it.fat_g,
+              conf: it.confidence === "low" ? "low" : acc.conf,
+            }),
+            { cal: 0, protein: 0, carbs: 0, fat: 0, conf: "high" as "low" | "medium" | "high" }
+          );
+          const summary =
+            items.length === 1
+              ? items[0].name
+              : items
+                  .slice(0, 3)
+                  .map((it) => it.name)
+                  .join(", ") + (items.length > 3 ? "…" : "");
           await logMeal({
-            name: result.name,
-            calories: result.calories,
-            protein: result.protein_g,
-            carbs: result.carbs_g,
-            fat: result.fat_g,
-            imageUrl: result.imageUrl,
-            confidence: result.confidence,
+            name: summary,
+            calories: totals.cal,
+            protein: totals.protein,
+            carbs: totals.carbs,
+            fat: totals.fat,
+            imageUrl: "",
+            confidence: totals.conf,
             notes: notes || undefined,
+            items,
           });
         }}
       />

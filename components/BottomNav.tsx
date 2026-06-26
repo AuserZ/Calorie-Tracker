@@ -71,8 +71,32 @@ function HistoryIcon({ active }: { active: boolean }) {
   );
 }
 
+function WaterIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 3c-3.5 4.5-6 7.8-6 11a6 6 0 0012 0c0-3.2-2.5-6.5-6-11z"
+        fill={active ? "rgba(46,91,255,.18)" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      {active && (
+        <path
+          d="M9 13c.4 1.4 1.4 2.4 2.7 2.7"
+          stroke="var(--color-blue)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          fill="none"
+        />
+      )}
+    </svg>
+  );
+}
+
 const items = [
   { href: "/", label: "Today", Icon: TodayIcon },
+  { href: "/water", label: "Water", Icon: WaterIcon },
   { href: "/weight", label: "Weight", Icon: WeightIcon },
   { href: "/history", label: "History", Icon: HistoryIcon },
 ] as const;

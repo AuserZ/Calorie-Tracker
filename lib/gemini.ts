@@ -1,39 +1,85 @@
-import type { AnalysisResult } from "./types";
+import type { AnalysisFoodItem, Confidence } from "./types";
 import { utensilsForPrompt } from "./utensils";
 
-const MODEL = "gemini-flash-latest";
+const MODEL = "gemini-2.5-flash";
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+
+// The available food keys (kept in sync with lib/foods.ts).
+const FOOD_KEYS = `Available food recognition keys (match these when you recognize a dish):
+- rice: Steamed white rice
+- fried_rice: Nasi goreng
+- ayam_goreng: Ayam goreng / fried chicken
+- ayam_bakar: Ayam bakar / grilled chicken
+- telur_dadar: Telur dadar / omelette
+- telur_rebus: Telur rebus / boiled egg
+- tempe_goreng: Tempe goreng
+- tahu_goreng: Tahu goreng
+- rendang: Rendang
+- soto: Soto ayam
+- gado_gado: Gado-gado
+- nasi_kuning: Nasi kuning
+- nasi_uduk: Nasi uduk
+- bubur: Bubur ayam
+- mie_goreng: Mie goreng
+- bakso: Bakso
+- roti: White bread
+- pisang: Banana
+- tahu_saus_tiram: Tahu saus tiram
+- sayur_goreng: Stir-fried vegetables
+- sambal: Sambal
+`;
 
 function buildPrompt(notes: string): string {
   const trimmed = notes.trim();
   const userNotes = trimmed.length > 0 ? trimmed : "(none)";
 
-  return `You are a precise nutrition estimation assistant. Inspect the food image and the user's portion/preparation notes (if provided), then estimate nutritional content for the visible portion only.
+  return `You are a precise nutrition estimation assistant. Examine the food image and the user's portion/preparation notes (if provided), then identify EACH distinct food item visible on the plate and estimate nutritional content for the visible portion only.
 
 # Reference utensils
 The user may describe portions using the utensils below (Indonesian / English). Use these as size cues when interpreting the photo and the user notes:
 
 ${utensilsForPrompt()}
 
+# Known food keys
+Use these keys when you recognize a dish. They match a local nutrition database:
+
+${FOOD_KEYS}
+
 # User notes
 ${userNotes}
 
-# Output
-Return STRICT JSON only. No prose. No markdown fences. Use exactly this shape:
-{"name": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "confidence": "low"|"medium"|"high"}
+# Output format
+Return STRICT JSON only. No prose. No markdown fences. Use exactly this structure:
+[
+  {
+    "name": "Human-readable dish name in English, e.g. Fried chicken thigh with rice",
+    "food_key": "ayam_goreng" or null,
+    "portion_grams": 250,
+    "portion_label": "1 plate + 1 cup" or null,
+    "cooking_method": "fried" or null,
+    "calories": 420,
+    "protein_g": 35,
+    "carbs_g": 28,
+    "fat_g": 20,
+    "confidence": "high" or "medium" or "low",
+    "alternatives": [] or null
+  }
+]
 
-If the image does not contain food at all, return:
-{"error": "not_food"}
+Return ONE item per distinct food type visible. If there are 3 things on the plate, return 3 items.
 
 # Rules
-- Numbers must be integers (round). Calories in kcal, macros in grams.
-- "name" is concise, 2–6 words, in English. Include preparation method when obvious (e.g. "Grilled chicken thigh with rice").
-- "confidence" reflects how sure you are about both the identification AND the portion size:
-  - high: clear photo + clear portion (or user notes pin the portion exactly)
-  - medium: identifiable but portion is somewhat ambiguous
-  - low: blurry, partially visible, or user notes contradict the image
-- If user notes specify a quantity ("2 sendok makan rice", "1 mangkuk sup"), trust them and adjust portion accordingly.
-- Be realistic: typical home/restaurant portions, not extreme.`;
+- Numbers must be integers (round to nearest). Calories in kcal, macros in grams.
+- "name" is concise, 2–6 words in English.
+- "food_key" is the best match from the list above (lowercase, underscore separated). Return null if unsure or it doesn't match.
+- "portion_grams" is your best visual estimate in grams (typical rice ≈ 1 bowl ≈ 150–200g, 1 medium chicken thigh ≈ 120g, 1 large egg ≈ 50g).
+- "conf" — high: clear photo + clear portion/notes; medium: identifiable but portion ambiguous; low: blurry, obscured, or notes contradict image.
+- If confidence is "low", provide alternatives: [{"name": "Alternative identification"}].
+- If user notes specify quantity ("2 sendok rice", "1 mangkuk sup"), trust them and adjust.
+- Be realistic: typical home/restaurant portions, not extreme.
+- If NO food is visible, return: {"error": "not_food"}
+
+# Critical: count every food item on the plate, don't lump them together.`;
 }
 
 type GeminiTextPart = { text: string };
@@ -65,7 +111,7 @@ export async function analyzeFoodImage(
   base64: string,
   mimeType: string,
   notes: string = ""
-): Promise<AnalysisResult> {
+): Promise<{ ok: true; items: AnalysisFoodItem[]; imageUrl: string } | { ok: false; error: "not_food" | "parse_failed" | "api_error" | "bad_request"; message?: string }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return { ok: false, error: "api_error", message: "GEMINI_API_KEY missing" };
@@ -110,52 +156,80 @@ export async function analyzeFoodImage(
   }
 
   const json = (await res.json()) as GeminiResponse;
-  const text = extractText(json);
+  let text = extractText(json);
   if (!text) {
     return { ok: false, error: "parse_failed", message: "empty response" };
   }
 
-  let parsed: Record<string, unknown>;
+  // Normalize: if it returned a single object, wrap in array
+  const cleaned = stripFences(text);
+  const isArray = cleaned.trimStart().startsWith("[");
+  const jsonStr = isArray ? cleaned : `[${cleaned}]`;
+
+  let parsed: AnalysisFoodItem[];
   try {
-    parsed = JSON.parse(stripFences(text));
+    parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) {
+      // fallback: wrap if it's somehow an object
+      parsed = [parsed as unknown as AnalysisFoodItem];
+    }
   } catch {
     return { ok: false, error: "parse_failed", message: text.slice(0, 200) };
   }
 
-  if (parsed.error === "not_food") {
-    return { ok: false, error: "not_food" };
+  // Validate and normalize items
+  const items: AnalysisFoodItem[] = [];
+  for (const raw of parsed) {
+    // Skip not_food marker if embedded
+    if ((raw as any).error === "not_food") {
+      return { ok: false, error: "not_food" };
+    }
+
+    const name = typeof raw.name === "string" ? raw.name : null;
+    const calories = Number(raw.calories);
+    const protein_g = Number(raw.protein_g);
+    const carbs_g = Number(raw.carbs_g);
+    const fat_g = Number(raw.fat_g);
+    const portion_grams = Number(raw.portion_grams);
+    const confidence: Confidence =
+      raw.confidence === "low" || raw.confidence === "medium" || raw.confidence === "high"
+        ? raw.confidence
+        : "medium";
+    const food_key = typeof raw.food_key === "string" ? raw.food_key : undefined;
+    const portion_label = typeof raw.portion_label === "string" ? raw.portion_label : undefined;
+    const cooking_method = typeof raw.cooking_method === "string" ? raw.cooking_method : undefined;
+    const alternatives = Array.isArray(raw.alternatives)
+      ? (raw.alternatives as { name: string; food_key?: string }[])
+      : undefined;
+
+    if (
+      !name ||
+      !Number.isFinite(calories) ||
+      !Number.isFinite(protein_g) ||
+      !Number.isFinite(carbs_g) ||
+      !Number.isFinite(fat_g)
+    ) {
+      continue; // skip malformed items
+    }
+
+    items.push({
+      name,
+      food_key,
+      portion_grams: portion_grams || 100,
+      portion_label,
+      cooking_method,
+      calories: Math.round(calories),
+      protein_g: Math.round(protein_g),
+      carbs_g: Math.round(carbs_g),
+      fat_g: Math.round(fat_g),
+      confidence,
+      alternatives,
+    });
   }
 
-  const name = typeof parsed.name === "string" ? parsed.name : null;
-  const calories = Number(parsed.calories);
-  const protein_g = Number(parsed.protein_g);
-  const carbs_g = Number(parsed.carbs_g);
-  const fat_g = Number(parsed.fat_g);
-  const confidence =
-    parsed.confidence === "low" ||
-    parsed.confidence === "medium" ||
-    parsed.confidence === "high"
-      ? parsed.confidence
-      : "medium";
-
-  if (
-    !name ||
-    !Number.isFinite(calories) ||
-    !Number.isFinite(protein_g) ||
-    !Number.isFinite(carbs_g) ||
-    !Number.isFinite(fat_g)
-  ) {
-    return { ok: false, error: "parse_failed", message: text.slice(0, 200) };
+  if (items.length === 0) {
+    return { ok: false, error: "parse_failed", message: "no valid items detected" };
   }
 
-  return {
-    ok: true,
-    name,
-    calories: Math.round(calories),
-    protein_g: Math.round(protein_g),
-    carbs_g: Math.round(carbs_g),
-    fat_g: Math.round(fat_g),
-    confidence,
-    imageUrl: "",
-  };
+  return { ok: true, items, imageUrl: "" };
 }

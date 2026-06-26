@@ -2,15 +2,13 @@
 import { useRef, useState } from "react";
 import Button from "./ui/Button";
 import UtensilsReference from "./UtensilsReference";
-import type { AnalysisResult } from "@/lib/types";
+import { resolveFood } from "@/lib/foods";
+import type { AnalysisFoodItem } from "@/lib/types";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onLogged: (
-    result: Extract<AnalysisResult, { ok: true }>,
-    notes: string
-  ) => Promise<void>;
+  onLogged: (items: AnalysisFoodItem[], notes: string) => Promise<void>;
 };
 
 export default function FoodCapture({ open, onClose, onLogged }: Props) {
@@ -19,12 +17,12 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [items, setItems] = useState<AnalysisFoodItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [imgIdx, setImgIdx] = useState(0);
   const [compressing, setCompressing] = useState(false);
+  const [altIdx, setAltIdx] = useState<Record<number, number>>({});
 
   function reset() {
     setFile(null);
@@ -33,11 +31,12 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
       return null;
     });
     setNotes("");
-    setResult(null);
+    setItems([]);
     setError(null);
     setAnalyzing(false);
     setSaving(false);
     setCompressing(false);
+    setAltIdx({});
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -53,7 +52,6 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
   function pick(f: File) {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     const url = URL.createObjectURL(f);
-    // Compress to max 1.5MB if over 1MB so upload always succeeds
     if (f.size > 5 * 1024 * 1024) {
       setCompressing(true);
       compressImage(url, 1024 * 1024 * 1.5).then((compressed) => {
@@ -65,9 +63,8 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
       setFile(f);
       setPreviewUrl(url);
     }
-    setResult(null);
+    setItems([]);
     setError(null);
-    setImgIdx(0);
   }
 
   function compressImage(
@@ -125,23 +122,20 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
       if (notes.trim()) fd.append("notes", notes.trim());
       const res = await fetch("/api/analyze", { method: "POST", body: fd });
 
-      let json: AnalysisResult;
+      let json: { ok: boolean; items?: AnalysisFoodItem[]; imageUrl?: string; error?: string; message?: string };
       try {
-        json = (await res.json()) as AnalysisResult;
+        json = (await res.json()) as typeof json;
       } catch {
         const bodyText = await res.text().catch(() => "");
-        let msg = "";
         if (res.status === 413) {
-          msg = "Photo is too large. Try taking a smaller photo or reducing the image quality in your camera settings.";
+          setError("Photo is too large. Try taking a smaller photo.");
         } else if (res.status === 0) {
-          msg = "Network error — check your connection and try again.";
+          setError("Network error — check your connection.");
         } else if (res.status >= 500) {
-          msg = "Server error. Try again in a moment.";
+          setError("Server error. Try again in a moment.");
         } else {
-          msg = bodyText || `Request failed (${res.status})`;
+          setError(bodyText || `Request failed (${res.status})`);
         }
-        setError(msg);
-        setResult(null);
         setAnalyzing(false);
         return;
       }
@@ -152,28 +146,87 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
             ? "That doesn't look like food. Try another photo."
             : json.message ?? "Couldn't analyze that image."
         );
-        setResult(null);
+        setItems([]);
       } else {
-        setResult(json);
+        // Resolve LLM estimates with food DB where possible
+        const resolved = (json.items ?? []).map((item) => {
+          if (item.food_key) {
+            const r = resolveFood(item.food_key, item.portion_grams);
+            if (r) {
+              return {
+                ...item,
+                calories: r.calories,
+                protein_g: r.protein_g,
+                carbs_g: r.carbs_g,
+                fat_g: r.fat_g,
+              };
+            }
+          }
+          return item;
+        });
+        resolved.forEach((_, i) => {
+          if (!resolved[i].uid) resolved[i].uid = `${Date.now()}-${i}`;
+        });
+        setItems(resolved);
+        setError(null);
       }
     } catch (e) {
-      setError(
-        e instanceof TypeError && e.message.includes("fetch")
-          ? "Network error — check your connection and try again."
-          : e instanceof Error
-          ? e.message
-          : "Network error"
-      );
+      setError("Network error");
     } finally {
       setAnalyzing(false);
     }
   }
 
+  function updateItem(index: number, patch: Partial<AnalysisFoodItem>) {
+    setItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item))
+    );
+  }
+
+  function removeItem(index: number) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function useAlternative(index: number, altIndex: number) {
+    const item = items[index];
+    if (!item?.alternatives?.[altIndex]) return;
+    const alt = item.alternatives[altIndex];
+    setAltIdx((prev) => ({ ...prev, [index]: altIndex }));
+
+    // Re-resolve via food DB
+    if (alt.food_key) {
+      const r = resolveFood(alt.food_key, item.portion_grams);
+      if (r) {
+        updateItem(index, {
+          name: alt.name,
+          calories: r.calories,
+          protein_g: r.protein_g,
+          carbs_g: r.carbs_g,
+          fat_g: r.fat_g,
+        });
+        return;
+      }
+    }
+    updateItem(index, { name: alt.name, food_key: alt.food_key });
+  }
+
+  function totals() {
+    return items.reduce(
+      (acc, it) => ({
+        cal: acc.cal + it.calories,
+        p: acc.p + it.protein_g,
+        c: acc.c + it.carbs_g,
+        f: acc.f + it.fat_g,
+      }),
+      { cal: 0, p: 0, c: 0, f: 0 }
+    );
+  }
+
   async function save() {
-    if (!result || !result.ok) return;
+    if (items.length === 0) return;
     setSaving(true);
     try {
-      await onLogged(result, notes.trim());
+      await onLogged(items, notes.trim());
       handleClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save meal.");
@@ -181,13 +234,12 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
     }
   }
 
-  const step = result?.ok
-    ? "result"
-    : analyzing
-    ? "analyzing"
-    : "camera";
+  const step = items.length > 0 ? "result" : analyzing ? "analyzing" : "camera";
 
   if (!open) return null;
+
+  const t = totals();
+  const lowConfCount = items.filter((it) => it.confidence === "low").length;
 
   return (
     <div
@@ -214,20 +266,18 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
         aria-modal="true"
         aria-label="Log a meal"
       >
-        {/* Drag handle */}
         <div
           className="w-11 h-[5px] rounded-full mx-auto mb-3.5 mt-1"
           style={{ background: "rgba(21,20,15,.18)" }}
         />
 
-        {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="serif text-[30px] leading-none tracking-tight m-0">
             {step === "camera" && "Snap a meal"}
             {step === "analyzing" && (
               <em style={{ color: "var(--color-tang)" }}>Tasting…</em>
             )}
-            {step === "result" && "Here's what I see"}
+            {step === "result" && "Review your plate"}
           </h2>
           <button
             aria-label="Close"
@@ -273,11 +323,6 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
                 src={previewUrl}
                 alt="Food preview"
                 className="w-full h-full object-cover pointer-events-none"
-                style={{
-                  transform:
-                    step === "analyzing" ? "scale(1.04)" : "scale(1)",
-                  transition: "transform 1.2s ease-out",
-                }}
               />
               {compressing && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-ink/40 rounded-[22px]">
@@ -295,63 +340,10 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
                   </span>
                 </div>
               )}
-              {step === "analyzing" && (
-                <>
-                  {/* Scan line */}
-                  <div
-                    className="absolute left-0 right-0"
-                    style={{
-                      height: 80,
-                      background:
-                        "linear-gradient(180deg,transparent,rgba(255,162,69,.5),transparent)",
-                      animation:
-                        "scanline 1.6s ease-in-out infinite alternate",
-                    }}
-                  />
-                  {/* Corner brackets */}
-                  {(
-                    [
-                      { top: 12, left: 12, bw: "2px 0 0 2px" },
-                      { top: 12, right: 12, bw: "2px 2px 0 0" },
-                      { bottom: 12, left: 12, bw: "0 0 2px 2px" },
-                      { bottom: 12, right: 12, bw: "0 2px 2px 0" },
-                    ] as const
-                  ).map(({ bw, ...pos }, i) => (
-                    <span
-                      key={i}
-                      className="absolute"
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderColor: "var(--color-lime)",
-                        borderStyle: "solid",
-                        borderWidth: bw,
-                        ...pos,
-                        animation: "fadeIn .3s",
-                      }}
-                    />
-                  ))}
-                  {/* Status text */}
-                  <div className="absolute bottom-[18px] left-0 right-0 flex justify-center gap-2 items-center text-white">
-                    <span
-                      className="rounded-full"
-                      style={{
-                        width: 8,
-                        height: 8,
-                        background: "var(--color-lime)",
-                        animation: "pulseRing 1.4s infinite",
-                      }}
-                    />
-                    <span
-                      className="mono text-[11px] tracking-[.18em] uppercase"
-                      style={{
-                        textShadow: "0 1px 6px rgba(0,0,0,.6)",
-                      }}
-                    >
-                      Detecting · Counting · Estimating
-                    </span>
-                  </div>
-                </>
+              {items.length > 0 && (
+                <div className="absolute top-3 right-3 bg-ink/60 text-white text-[11px] px-2 py-0.5 rounded-full font-semibold backdrop-blur-sm">
+                  {items.length} item{items.length > 1 ? "s" : ""} detected
+                </div>
               )}
             </>
           ) : (
@@ -403,35 +395,8 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
           )}
         </div>
 
-        {/* Photo thumbnail selector */}
-        {previewUrl && step === "camera" && (
-          <div className="flex gap-2 mb-3.5">
-            {[0, 1, 2].map((i) => (
-              <button
-                key={i}
-                onClick={() => fileRef.current?.click()}
-                style={{ width: 64, height: 64, touchAction: "manipulation" }}
-                className={`relative rounded-xl overflow-hidden border-2 transition ${
-                  imgIdx === i ? "border-tang" : "border-transparent"
-                }`}
-              >
-                {imgIdx === i && previewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={previewUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-cream-2 flex items-center justify-center">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Notes textarea */}
-        {step !== "analyzing" && (
+        {step === "camera" && previewUrl && (
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -443,6 +408,13 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
 
         <UtensilsReference />
 
+        {/* Low confidence warning */}
+        {lowConfCount > 0 && step === "result" && (
+          <div className="bg-warn/10 text-warn rounded-2xl p-3 text-sm mt-3">
+            ⚠ {lowConfCount} item{lowConfCount > 1 ? "s have" : " has"} low confidence — review or pick an alternative below.
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <div
@@ -453,73 +425,135 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
           </div>
         )}
 
-        {/* Result card */}
-        {result?.ok && (
-          <div
-            className="bg-surface rounded-[20px] p-3.5 border border-line mt-3"
-            style={{ animation: "scaleIn .4s cubic-bezier(.2,.8,.2,1)" }}
-          >
-            <div className="flex items-center gap-2 mb-2.5 flex-nowrap">
-              <span className="text-lg">✨</span>
-              <span
-                className="serif text-[22px]"
-                style={{ fontStyle: "italic" }}
-              >
-                {result.name}
+        {/* Items list (confirm/edit screen) */}
+        {items.length > 0 && (
+          <div style={{ animation: "scaleIn .4s cubic-bezier(.2,.8,.2,1)" }}>
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-xs font-semibold tracking-[.1em] uppercase text-ink-soft">
+                Plate total
               </span>
-              <span className="shrink-0">
-                <span
-                  className="text-[11px] px-2.5 py-1 rounded-full font-bold tracking-[.04em]"
-                  style={{
-                    background: "rgba(31,179,107,.12)",
-                    color: "#0F8F4D",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  High match
-                </span>
+              <span className="text-sm font-bold">
+                {t.cal} kcal · P:{t.p} C:{t.c} F:{t.f}
               </span>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                {
-                  label: "kcal",
-                  val: result.calories,
-                  big: true,
-                },
-                { label: "P", val: `${result.protein_g}g` },
-                { label: "C", val: `${result.carbs_g}g` },
-                { label: "F", val: `${result.fat_g}g` },
-              ].map((s, i) => (
-                <div
-                  key={i}
-                  className="bg-cream rounded-[14px] p-2.5 text-center"
-                >
-                  <div
-                    className="serif tnum"
-                    style={{
-                      fontSize: s.big ? 28 : 18,
-                      lineHeight: 1,
-                    }}
-                  >
-                    {s.val}
+
+            {items.map((item, i) => (
+              <div
+                key={item.uid ?? i}
+                className="bg-surface rounded-[20px] p-3.5 border border-line mb-2.5"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-lg shrink-0">
+                      {item.cooking_method === "fried" || item.cooking_method === "goreng"
+                        ? "🍳"
+                        : item.cooking_method === "grilled" || item.cooking_method === "bakar"
+                        ? "🔥"
+                        : "🍽️"}
+                    </span>
+                    <span
+                      className="serif text-[18px] truncate"
+                      style={{ fontStyle: "italic" }}
+                      title={item.name}
+                    >
+                      {item.name}
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold tracking-[.04em] shrink-0 ${
+                        item.confidence === "high"
+                          ? "bg-good/15 text-good"
+                          : item.confidence === "medium"
+                          ? "bg-warn/15 text-warn"
+                          : "bg-bad/15 text-bad"
+                      }`}
+                    >
+                      {item.confidence === "high"
+                        ? "High"
+                        : item.confidence === "medium"
+                        ? "Medium"
+                        : "Low"}
+                    </span>
                   </div>
-                  <div className="text-[9px] tracking-[.12em] uppercase text-ink-soft font-bold mt-1">
-                    {s.label}
+                  <button
+                    onClick={() => removeItem(i)}
+                    className="w-7 h-7 flex items-center justify-center text-ink-soft/50 hover:text-bad/70 transition cursor-pointer ml-2 shrink-0"
+                    aria-label="Remove item"
+                    style={{ border: "none", background: "none" }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 text-center bg-cream rounded-[14px] p-2">
+                    <div className="serif tnum text-[22px]">{item.calories}</div>
+                    <div className="text-[9px] tracking-[.12em] uppercase text-ink-soft font-bold">kcal</div>
+                  </div>
+                  <div className="flex-1 text-center bg-cream rounded-[14px] p-2">
+                    <div className="serif tnum text-[14px]">
+                      {item.portion_label ?? `${item.portion_grams}g`}
+                    </div>
+                    <div className="text-[9px] tracking-[.12em] uppercase text-ink-soft font-bold">portion</div>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                  {[
+                    { label: "Protein", val: `${item.protein_g}g` },
+                    { label: "Carbs", val: `${item.carbs_g}g` },
+                    { label: "Fat", val: `${item.fat_g}g` },
+                  ].map((m, mi) => (
+                    <div key={mi} className="bg-cream rounded-[10px] p-1.5 text-center">
+                      <div className="tnum text-[14px]">{m.val}</div>
+                      <div className="text-[8px] tracking-[.1em] uppercase text-ink-soft font-bold">{m.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Alternatives picker for low-confidence items */}
+                {item.confidence === "low" && item.alternatives && item.alternatives.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-dashed border-line/40">
+                    <div className="text-[11px] text-ink-soft font-semibold mb-1.5">
+                      Could also be…
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {item.alternatives.map((alt, ai) => (
+                        <button
+                          key={ai}
+                          onClick={() => useAlternative(i, ai)}
+                          className={`text-xs px-2.5 py-1.5 rounded-full border transition font-medium cursor-pointer ${
+                            (altIdx[i] ?? -1) === ai
+                              ? "border-tang bg-tang/10 text-tang"
+                              : "border-line/60 bg-surface text-ink-soft hover:border-tang/40"
+                          }`}
+                        >
+                          {alt.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <button
+              onClick={() => setItems([])}
+              className="w-full text-center text-[13px] text-ink-soft font-semibold tracking-[.06em] uppercase cursor-pointer hover:text-tang transition mt-3 bg-transparent border-none"
+            >
+              ← Retake photo
+            </button>
           </div>
         )}
 
         {/* Action buttons */}
         <div className="flex gap-2 mt-3.5">
-          {step === "camera" && previewUrl && (
+          {step === "camera" && previewUrl && items.length === 0 && (
             <Button
               variant="cta"
               block
-              disabled={!file || analyzing || compressing}
+              disabled={!!compressing}
               onClick={analyze}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -539,82 +573,25 @@ export default function FoodCapture({ open, onClose, onLogged }: Props) {
               onClick={() => fileRef.current?.click()}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <rect
-                  x="3"
-                  y="6.5"
-                  width="18"
-                  height="13"
-                  rx="3"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
-                <path
-                  d="M8 6.5l1.5-2h5L16 6.5"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinejoin="round"
-                />
-                <circle
-                  cx="12"
-                  cy="13"
-                  r="3.4"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
+                <rect x="3" y="6.5" width="18" height="13" rx="3" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M8 6.5l1.5-2h5L16 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                <circle cx="12" cy="13" r="3.4" stroke="currentColor" strokeWidth="1.6" />
               </svg>
               Take a photo
             </Button>
           )}
-          {step === "analyzing" && (
-            <Button variant="soft" block disabled>
-              <span className="inline-flex gap-1.5">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="rounded-full"
-                    style={{
-                      width: 6,
-                      height: 6,
-                      background: "var(--color-tang)",
-                      animation: `pulseRing 1.2s ${i * 0.15}s infinite`,
-                    }}
-                  />
-                ))}
-              </span>
-              <span className="ml-2">Finding flavor…</span>
-            </Button>
-          )}
           {step === "result" && (
-            <>
-              <Button
-                variant="soft"
-                onClick={() => setResult(null)}
-              >
-                Retake
-              </Button>
-              <Button
-                variant="cta"
-                block
-                disabled={saving}
-                onClick={save}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <path
-                    d="M5 12l5 5L20 7"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                {saving ? "Saving…" : "Log it"}
-              </Button>
-            </>
+            <Button
+              variant="cta"
+              block
+              disabled={saving || items.length === 0}
+              onClick={save}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {saving ? "Saving…" : `Log ${items.length} item${items.length > 1 ? "s" : ""}`}
+            </Button>
           )}
         </div>
       </div>

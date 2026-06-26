@@ -16,6 +16,24 @@ export type Profile = {
   dailyTargetOverride?: number;
 };
 
+/** A single detected food item inside a meal photo. */
+export type AnalysisFoodItem = {
+  /** Stable id assigned client-side after the LLM returns. */
+  uid?: string;
+  name: string;
+  food_key?: string;
+  portion_grams: number;
+  portion_label?: string;
+  cooking_method?: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  confidence: Confidence;
+  /** When confidence is low, alternative identifications to present as a picker. */
+  alternatives?: { name: string; food_key?: string }[];
+};
+
 export type Meal = {
   id: string;
   name: string;
@@ -29,6 +47,8 @@ export type Meal = {
   dateKey: string;
   /** Original portion/preparation notes the user typed when logging. */
   notes?: string;
+  /** Breakdown of items in this meal (post-aggregation). */
+  items?: AnalysisFoodItem[];
 };
 
 export type WeightEntry = {
@@ -38,15 +58,17 @@ export type WeightEntry = {
   dateKey: string;
 };
 
+export type WaterEntry = {
+  id: string;
+  ml: number;
+  loggedAt: Timestamp;
+  dateKey: string;
+};
+
 export type AnalysisResult =
   | {
       ok: true;
-      name: string;
-      calories: number;
-      protein_g: number;
-      carbs_g: number;
-      fat_g: number;
-      confidence: Confidence;
+      items: AnalysisFoodItem[];
       imageUrl: string;
     }
   | { ok: false; error: "not_food" | "parse_failed" | "api_error" | "bad_request"; message?: string };

@@ -10,6 +10,7 @@ import {
 import type { Meal, Profile } from "@/lib/types";
 import { dailyTarget, verdict } from "@/lib/calories";
 import MissingConfigNotice from "@/components/MissingConfigNotice";
+import CaloriesChart from "@/components/CaloriesChart";
 import Wordmark from "@/components/Wordmark";
 import { useCountUp } from "@/lib/useCountUp";
 import { cn } from "@/lib/cn";
@@ -33,6 +34,7 @@ export default function HistoryPage() {
   const [weightKg, setWeightKg] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [openDay, setOpenDay] = useState<string | null>(null);
+  const [range, setRange] = useState<7 | 14 | 30>(7);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
@@ -74,13 +76,14 @@ export default function HistoryPage() {
 
   const target =
     profile && weightKg ? dailyTarget(profile, weightKg) : 0;
+  const rangeDays = days.slice(0, range);
+
   const avg =
-    days.length > 0
+    rangeDays.length > 0
       ? Math.round(
-          days.reduce((a, d) => a + d.total, 0) / days.length
+          rangeDays.reduce((a, d) => a + d.total, 0) / rangeDays.length
         )
       : 0;
-  const maxTotal = Math.max(...days.map((d) => d.total), 1);
 
   return (
     <div className="relative min-h-screen md:ml-60">
@@ -125,83 +128,38 @@ export default function HistoryPage() {
                   </span>
                 </div>
               </div>
-              {target > 0 && (
-                <div className="text-right">
-                  <div className="text-[11px] tracking-[.16em] uppercase text-ink-soft font-bold">
-                    Target
+              <div className="flex items-center gap-2">
+                {target > 0 && (
+                  <div className="text-right mr-2">
+                    <div className="text-[11px] tracking-[.16em] uppercase text-ink-soft font-bold">
+                      Target
+                    </div>
+                    <div className="tnum serif text-[22px] mt-1">
+                      {target}
+                    </div>
                   </div>
-                  <div className="tnum serif text-[22px] mt-1">
-                    {target}
-                  </div>
+                )}
+                <div className="flex bg-cream rounded-xl border border-line p-0.5">
+                  {([7, 14, 30] as const).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setRange(r)}
+                      className={cn(
+                        "px-3 py-1 rounded-lg text-[11px] font-semibold tracking-[.04em] transition cursor-pointer",
+                        range === r
+                          ? "bg-ink text-cream"
+                          : "text-ink-soft hover:text-ink"
+                      )}
+                    >
+                      {r}d
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Bars */}
-            <div
-              className="grid gap-1.5 items-end"
-              style={{
-                gridTemplateColumns: `repeat(${Math.min(
-                  days.length,
-                  7
-                )}, 1fr)`,
-                height: 120,
-              }}
-            >
-              {[...days]
-                .slice(0, 7)
-                .reverse()
-                .map((d, i) => {
-                  const h = Math.max(8, (d.total / maxTotal) * 100);
-                  const over = target > 0 && d.total > target;
-                  const selected = openDay === d.dateKey;
-                  return (
-                    <button
-                      key={d.dateKey}
-                      onClick={() =>
-                        setOpenDay(
-                          selected ? null : d.dateKey
-                        )
-                      }
-                      className="flex flex-col items-center gap-1 bg-transparent border-none cursor-pointer p-0 h-full justify-end"
-                    >
-                      <span className="tnum text-[9px] text-ink-soft font-semibold">
-                        {Math.round(d.total / 100)}
-                        <sub className="text-[7px]">×100</sub>
-                      </span>
-                      <div
-                        className="w-full rounded-lg"
-                        style={{
-                          height: `${h}%`,
-                          background: selected
-                            ? "linear-gradient(180deg,var(--color-tang),var(--color-tang-2))"
-                            : over
-                            ? "linear-gradient(180deg,#FFA245,#FFD08A)"
-                            : "linear-gradient(180deg,var(--color-blue),var(--color-blue-2))",
-                          opacity: selected ? 1 : 0.8,
-                          animation: `barGrow .8s ${
-                            i * 0.05
-                          }s cubic-bezier(.2,.8,.2,1) both`,
-                          transformOrigin: "bottom",
-                          boxShadow: selected
-                            ? "0 8px 16px -6px rgba(255,106,26,.5)"
-                            : "none",
-                        }}
-                      />
-                      <span
-                        className="text-[10px] font-semibold"
-                        style={{
-                          color: selected
-                            ? "var(--color-ink)"
-                            : "var(--color-ink-soft)",
-                        }}
-                      >
-                        {d.dateKey.slice(8)}
-                      </span>
-                    </button>
-                  );
-                })}
-            </div>
+            {/* Line chart */}
+            <CaloriesChart days={rangeDays} target={target} />
           </section>
         )}
 

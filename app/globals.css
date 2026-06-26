@@ -30,7 +30,7 @@
 
   /* ─── Typography ──────────────────────────── */
   --font-body: var(--font-inter), 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-instrument-serif), 'Instrument Serif', ui-serif, Georgia, serif;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, monospace;
   /* keep --font-display for backwards compat but point to serif */
   --font-display: var(--font-serif);
@@ -115,6 +115,101 @@ h1, h2, h3, h4 {
 @keyframes liquidWave {
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
+}
+@keyframes wave1 {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-25%); }
+}
+@keyframes wave2 {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(25%); }
+}
+@keyframes waterDrop {
+  0%   { transform: translate(-50%, 0) scale(1); opacity: 1; }
+  70%  { transform: translate(-50%, 60px) scale(.6); opacity: .9; }
+  100% { transform: translate(-50%, 80px) scale(.2); opacity: 0; }
+}
+/* ── Water surface waves ──────────────────────────────────────────
+   Two layers drift horizontally in opposite directions at different
+   speeds to mimic real water (each layer is wider than the glass so
+   translateX loops seamlessly). A subtle scaleY breathe sells the
+   "settling" of the surface. */
+@keyframes wave1 {
+  0%   { transform: translateX(0)     scaleY(1); }
+  25%  { transform: translateX(-12%)  scaleY(1.15); }
+  50%  { transform: translateX(-25%)  scaleY(1); }
+  75%  { transform: translateX(-37%)  scaleY(.9); }
+  100% { transform: translateX(-50%)  scaleY(1); }
+}
+@keyframes wave2 {
+  0%   { transform: translateX(0)    scaleY(1); }
+  25%  { transform: translateX(10%)  scaleY(.85); }
+  50%  { transform: translateX(20%)  scaleY(1); }
+  75%  { transform: translateX(30%)  scaleY(1.2); }
+  100% { transform: translateX(40%)  scaleY(1); }
+}
+/* Slow vertical bob of the entire surface — mimics buoyancy. */
+@keyframes surfaceBob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(1.5px); }
+}
+/* Streaming pattern moving top→bottom along the stream column. */
+@keyframes streamFlow {
+  0%   { background-position: 0 0; }
+  100% { background-position: 0 12px; }
+}
+/* Subtle horizontal sway — gives the falling stream life instead of
+   looking like a rigid bar. Combined with streamFlow the stream
+   appears to bend slightly as it falls. */
+@keyframes streamSway {
+  0%, 100% { transform: translateX(-50%) translateX(0); }
+  25%      { transform: translateX(-50%) translateX(-0.6px); }
+  75%      { transform: translateX(-50%) translateX(0.6px); }
+}
+/* Waterfall slide-in: drops from above into the pouring position. */
+@keyframes streamSlideIn {
+  0%   { transform: translateY(-60px); opacity: 0; }
+  60%  { transform: translateY(0);     opacity: 1; }
+  100% { transform: translateY(0);     opacity: 1; }
+}
+/* Waterfall slide-out: rises back up out of frame after pour ends. */
+@keyframes streamSlideOut {
+  0%   { transform: translateY(0);     opacity: 1; }
+  100% { transform: translateY(-60px); opacity: 0; }
+}
+/* Droplet falling from spout — travels with the stream then fades. */
+@keyframes dropletFall {
+  0%   { transform: translate(-50%, 0) scale(1);    opacity: 0; }
+  10%  { transform: translate(-50%, 0) scale(1);    opacity: 1; }
+  85%  { transform: translate(-50%, 90%) scale(.7); opacity: 1; }
+  100% { transform: translate(-50%, 110%) scale(.2); opacity: 0; }
+}
+/* Splash at the water surface: bright pop + spreading ring. */
+@keyframes splashPulse {
+  0%   { transform: scaleX(.4) scaleY(.4); opacity: .9; }
+  50%  { transform: scaleX(1.6) scaleY(.8); opacity: .35; }
+  100% { transform: scaleX(.4) scaleY(.4); opacity: .9; }
+}
+/* Concentric ripples expanding outward from impact point. */
+@keyframes ripple {
+  0%   { transform: translate(-50%, -50%) scale(.2); opacity: .9; }
+  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+}
+/* Splashback droplet arcs up and outward from the impact point. */
+@keyframes splashBack {
+  0%   { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
+  60%  { transform: translate(-160%, -260%) scale(.7); opacity: .9; }
+  100% { transform: translate(-220%, -120%) scale(.1); opacity: 0; }
+}
+@keyframes splashBackR {
+  0%   { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+  60%  { transform: translate(60%, -260%) scale(.7); opacity: .9; }
+  100% { transform: translate(120%, -120%) scale(.1); opacity: 0; }
+}
+/* Slow horizontal sheen drift — suggests light refracting through the body. */
+@keyframes sheenDrift {
+  0%, 100% { background-position: 100% 0; }
+  50%      { background-position: 0% 0; }
 }
 @keyframes kenburns {
   from { transform: scale(1.04) translateY(0); }

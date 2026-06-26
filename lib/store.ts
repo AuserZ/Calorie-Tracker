@@ -14,7 +14,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db, USER_ID, isFirebaseConfigured } from "./firebase";
-import type { Meal, Profile, WeightEntry } from "./types";
+import type { Meal, Profile, WeightEntry, WaterEntry } from "./types";
 import { todayKey } from "./calories";
 
 export { isFirebaseConfigured };
@@ -22,6 +22,7 @@ export { isFirebaseConfigured };
 export const userDoc = () => doc(db(), "users", USER_ID);
 const mealsCol = () => collection(db(), "users", USER_ID, "meals");
 const weightsCol = () => collection(db(), "users", USER_ID, "weights");
+const waterCol = () => collection(db(), "users", USER_ID, "water");
 
 export async function getProfile(): Promise<Profile | null> {
   const snap = await getDoc(userDoc());
@@ -41,6 +42,7 @@ export async function logMeal(meal: {
   imageUrl: string;
   confidence: Meal["confidence"];
   notes?: string;
+  items?: Meal["items"];
 }): Promise<void> {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   // Strip undefined fields — Firestore rejects them.
@@ -50,6 +52,9 @@ export async function logMeal(meal: {
     dateKey: todayKey(),
   };
   if (!payload.notes) delete payload.notes;
+  if (!payload.items || (Array.isArray(payload.items) && payload.items.length === 0)) {
+    delete payload.items;
+  }
   await setDoc(doc(mealsCol(), id), payload);
 }
 
@@ -124,6 +129,35 @@ export async function getLatestWeight(): Promise<number | null> {
   const snap = await getDocs(query(weightsCol(), orderBy("loggedAt", "desc")));
   const first = snap.docs[0];
   return first ? (first.data().kg as number) : null;
+}
+
+export async function logWater(ml: number): Promise<void> {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  await setDoc(doc(waterCol(), id), {
+    ml,
+    loggedAt: serverTimestamp(),
+    dateKey: todayKey(),
+  });
+}
+
+export async function deleteWater(id: string): Promise<void> {
+  await deleteDoc(doc(waterCol(), id));
+}
+
+export function subscribeWaterForDay(
+  dateKey: string,
+  cb: (entries: WaterEntry[]) => void
+): () => void {
+  const q = query(waterCol(), where("dateKey", "==", dateKey));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as Omit<WaterEntry, "id">) }))
+      .sort(
+        (a, b) =>
+          (b.loggedAt?.toMillis?.() ?? 0) - (a.loggedAt?.toMillis?.() ?? 0)
+      );
+    cb(items);
+  });
 }
 
 export function tsNow(): Timestamp {
